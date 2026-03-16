@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: pdf-compiler
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn pdf_compiler.wsgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

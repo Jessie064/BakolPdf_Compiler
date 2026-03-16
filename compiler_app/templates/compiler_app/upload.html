@@ -1,0 +1,251 @@
+{% extends "compiler_app/base.html" %}
+{% block title %}Upload PDFs — PDF Compiler{% endblock %}
+{% block step1_class %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ─── Drop Zone ─────────────────────────────────── */
+  .drop-zone {
+    border: 2px dashed rgba(99,102,241,0.3);
+    border-radius: var(--radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: #f8fafc;
+    position: relative;
+  }
+
+  .drop-zone:hover,
+  .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: #eef2ff;
+    transform: scale(1.01);
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    display: block;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+
+  .drop-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.35rem;
+  }
+
+  .drop-sub {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .drop-badge {
+    display: inline-block;
+    margin-top: 0.75rem;
+    padding: 0.3rem 0.75rem;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--accent-light);
+  }
+
+  /* queued file list inside drop zone */
+  #queue-list { margin-top: 1.5rem; text-align: left; }
+
+  /* file count badge */
+  .count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(16,185,129,0.15);
+    border: 1px solid rgba(16,185,129,0.3);
+    color: var(--success);
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  .actions-row {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  /* Clear all btn */
+  form.clear-form { margin: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Upload Your PDF Files</h1>
+  <p>Select or drag &amp; drop multiple PDF files below — up to 20 MB each</p>
+</div>
+
+<div class="card">
+
+  {% if errors %}
+    {% for error in errors %}
+    <div class="alert alert-error" role="alert">
+      ⚠️ {{ error }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Upload form -->
+  <form id="upload-form" method="post" enctype="multipart/form-data" action="{% url 'compiler_app:upload' %}">
+    {% csrf_token %}
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" name="files" id="file-input" multiple accept=".pdf" />
+      <span class="drop-icon">📂</span>
+      <p class="drop-title">Drop PDFs here or click to browse</p>
+      <p class="drop-sub">Supports multiple files at once</p>
+      <span class="drop-badge">PDF only &bull; max 20 MB each</span>
+      <div id="queue-list"></div>
+    </div>
+
+    <div class="actions-row">
+      <button type="submit" class="btn btn-primary" id="upload-btn" style="flex:1;">
+        <div class="spinner" id="upload-spinner"></div>
+        <span id="upload-btn-text">⬆ Upload Files</span>
+      </button>
+    </div>
+  </form>
+
+  {% if files %}
+  <div class="divider"></div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+    <div class="count-badge">✓ {{ files|length }} file{{ files|length|pluralize }} uploaded</div>
+    <form class="clear-form" method="post" action="{% url 'compiler_app:clear_session' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost" style="padding:0.4rem 0.9rem;font-size:0.8rem;" onclick="return confirm('Clear all uploaded files?')">
+        🗑 Clear All
+      </button>
+    </form>
+  </div>
+
+  <div id="uploaded-list">
+    {% for uf in files %}
+    <div class="file-item" id="item-{{ uf.pk }}">
+      <span class="file-icon">📄</span>
+      <div class="file-info">
+        <div class="file-name">{{ uf.filename }}</div>
+        <div class="file-size">Uploaded {{ uf.uploaded_at|date:"M j, H:i" }}</div>
+      </div>
+      <button class="btn btn-danger" onclick="deleteFile('{{ uf.pk }}', this)" title="Remove">✕</button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="actions-row" style="margin-top:1.25rem;">
+    <a href="{% url 'compiler_app:arrange' %}" class="btn btn-primary btn-full">
+      Arrange Order →
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const queueList = document.getElementById('queue-list');
+  const uploadBtn = document.getElementById('upload-btn');
+  const uploadSpinner = document.getElementById('upload-spinner');
+  const uploadBtnText = document.getElementById('upload-btn-text');
+
+  // Drag-over visual
+  ['dragenter','dragover'].forEach(ev =>
+    dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('drag-over'); })
+  );
+  ['dragleave','drop'].forEach(ev =>
+    dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over'))
+  );
+
+  fileInput.addEventListener('change', () => renderQueue(fileInput.files));
+
+  function renderQueue(files) {
+    queueList.innerHTML = '';
+    if (!files.length) return;
+    const header = document.createElement('div');
+    header.className = 'count-badge';
+    header.textContent = `${files.length} file${files.length > 1 ? 's' : ''} ready to upload`;
+    queueList.appendChild(header);
+    Array.from(files).forEach(f => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = `<span class="file-icon">📄</span>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(f.name)}</div>
+          <div class="file-size">${formatSize(f.size)}</div>
+        </div>`;
+      queueList.appendChild(item);
+    });
+  }
+
+  // Show spinner on submit
+  document.getElementById('upload-form').addEventListener('submit', () => {
+    uploadSpinner.style.display = 'block';
+    uploadBtnText.textContent = 'Uploading…';
+    uploadBtn.disabled = true;
+  });
+
+  // Delete single file via AJAX
+  function deleteFile(pk, btn) {
+    btn.disabled = true;
+    fetch(`/delete/${pk}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'ok') {
+        const item = document.getElementById(`item-${pk}`);
+        item.style.transition = 'opacity 0.3s, transform 0.3s';
+        item.style.opacity = '0';
+        item.style.transform = 'translateX(20px)';
+        setTimeout(() => item.remove(), 300);
+      }
+    });
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1024/1024).toFixed(1) + ' MB';
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function getCookie(name) {
+    const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? v[2] : null;
+  }
+</script>
+{% endblock %}

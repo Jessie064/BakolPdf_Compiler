@@ -1,0 +1,302 @@
+{% extends "compiler_app/base.html" %}
+{% block title %}Arrange Order — PDF Compiler{% endblock %}
+{% block step1_class %}done{% endblock %}
+{% block step2_class %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sortable-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .sortable-item {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.9rem 1rem;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: grab;
+    transition: all 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .sortable-item:active { cursor: grabbing; }
+
+  .sortable-item.dragging {
+    opacity: 0.4;
+    transform: scale(0.98);
+  }
+
+  .sortable-item.drag-over-top {
+    border-top: 2px solid var(--accent);
+  }
+
+  .sortable-item.drag-over-bottom {
+    border-bottom: 2px solid var(--accent);
+  }
+
+  .sortable-item:hover {
+    background: var(--bg-card-hover);
+    border-color: #cbd5e1;
+    transform: translateX(4px);
+  }
+
+  .drag-handle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    cursor: grab;
+    transition: color 0.2s;
+  }
+
+  .sortable-item:hover .drag-handle { color: var(--accent-light); }
+
+  .order-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.3);
+    color: var(--accent-light);
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .file-icon { font-size: 1.3rem; flex-shrink: 0; }
+  .file-info { flex: 1; min-width: 0; }
+  .file-name { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+  .hint-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-sm);
+    background: #f8fafc;
+    border: 1px solid var(--border);
+  }
+
+  #compile-status {
+    display: none;
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .status-merging {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.3);
+    color: var(--accent-light);
+  }
+
+  .status-error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: #fca5a5;
+  }
+
+  .progress-track {
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 0.75rem;
+    display: none;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    border-radius: 999px;
+    transition: width 0.3s;
+  }
+
+  .actions-row {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Arrange File Order</h1>
+  <p>Drag files into the order you want them merged</p>
+</div>
+
+<div class="card">
+
+  <div class="hint-bar">
+    ☰&nbsp; Drag items to reorder &nbsp;·&nbsp; The top file will be first in the merged PDF
+  </div>
+
+  <div class="sortable-list" id="sortable-list">
+    {% for uf in files %}
+    <div class="sortable-item" draggable="true" data-pk="{{ uf.pk }}" id="si-{{ uf.pk }}">
+      <span class="drag-handle">⣿</span>
+      <span class="order-badge" id="badge-{{ uf.pk }}">{{ forloop.counter }}</span>
+      <span class="file-icon">📄</span>
+      <div class="file-info">
+        <div class="file-name">{{ uf.filename }}</div>
+        <div class="file-meta">File {{ forloop.counter }} of {{ files|length }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div id="compile-status"></div>
+  <div class="progress-track" id="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <div class="actions-row">
+    <a href="{% url 'compiler_app:upload' %}" class="btn btn-ghost">← Back</a>
+    <button id="compile-btn" class="btn btn-primary" style="flex:1;" onclick="compilePDF()">
+      <div class="spinner" id="compile-spinner"></div>
+      <span id="compile-btn-text">⚡ Compile PDF</span>
+    </button>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // ─── Drag & Drop Sorting ───────────────────────────────────────────────────
+  const list = document.getElementById('sortable-list');
+  let dragSrc = null;
+
+  list.addEventListener('dragstart', e => {
+    dragSrc = e.target.closest('.sortable-item');
+    dragSrc.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  list.addEventListener('dragend', () => {
+    dragSrc.classList.remove('dragging');
+    document.querySelectorAll('.sortable-item').forEach(el => {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+    refreshBadges();
+  });
+
+  list.addEventListener('dragover', e => {
+    e.preventDefault();
+    const target = e.target.closest('.sortable-item');
+    if (!target || target === dragSrc) return;
+    const rect = target.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    document.querySelectorAll('.sortable-item').forEach(el =>
+      el.classList.remove('drag-over-top', 'drag-over-bottom')
+    );
+    if (e.clientY < midY) {
+      target.classList.add('drag-over-top');
+    } else {
+      target.classList.add('drag-over-bottom');
+    }
+  });
+
+  list.addEventListener('drop', e => {
+    e.preventDefault();
+    const target = e.target.closest('.sortable-item');
+    if (!target || target === dragSrc) return;
+    const rect = target.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      list.insertBefore(dragSrc, target);
+    } else {
+      list.insertBefore(dragSrc, target.nextSibling);
+    }
+  });
+
+  function refreshBadges() {
+    document.querySelectorAll('.sortable-item').forEach((el, i) => {
+      const badge = el.querySelector('.order-badge');
+      if (badge) badge.textContent = i + 1;
+    });
+  }
+
+  function getOrderedPKs() {
+    return Array.from(list.querySelectorAll('.sortable-item')).map(el => el.dataset.pk);
+  }
+
+  // ─── Compile ───────────────────────────────────────────────────────────────
+  function compilePDF() {
+    const btn = document.getElementById('compile-btn');
+    const spinner = document.getElementById('compile-spinner');
+    const btnText = document.getElementById('compile-btn-text');
+    const statusEl = document.getElementById('compile-status');
+    const progressTrack = document.getElementById('progress-track');
+    const progressFill = document.getElementById('progress-fill');
+
+    btn.disabled = true;
+    spinner.style.display = 'block';
+    btnText.textContent = 'Merging…';
+    statusEl.style.display = 'block';
+    statusEl.className = 'status-merging';
+    statusEl.textContent = '⚙️ Merging your PDFs, please wait…';
+    progressTrack.style.display = 'block';
+
+    // Animate progress bar
+    let pct = 0;
+    const ticker = setInterval(() => {
+      pct = Math.min(pct + Math.random() * 12, 88);
+      progressFill.style.width = pct + '%';
+    }, 300);
+
+    fetch('{% url "compiler_app:compile" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: JSON.stringify({ order: getOrderedPKs() }),
+    })
+    .then(r => r.json())
+    .then(d => {
+      clearInterval(ticker);
+      progressFill.style.width = '100%';
+      if (d.status === 'ok') {
+        statusEl.textContent = '✅ Merge complete! Redirecting…';
+        setTimeout(() => window.location.href = d.redirect, 600);
+      } else {
+        throw new Error(d.message || 'Merge failed');
+      }
+    })
+    .catch(err => {
+      clearInterval(ticker);
+      progressFill.style.width = '0%';
+      btn.disabled = false;
+      spinner.style.display = 'none';
+      btnText.textContent = '⚡ Try Again';
+      statusEl.className = 'status-error';
+      statusEl.textContent = '❌ Error: ' + err.message;
+    });
+  }
+
+  function getCookie(name) {
+    const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? v[2] : null;
+  }
+</script>
+{% endblock %}

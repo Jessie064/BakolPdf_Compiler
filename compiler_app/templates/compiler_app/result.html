@@ -1,0 +1,169 @@
+{% extends "compiler_app/base.html" %}
+{% block title %}Download — PDF Compiler{% endblock %}
+{% block step1_class %}done{% endblock %}
+{% block step2_class %}done{% endblock %}
+{% block step3_class %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .result-card {
+    text-align: center;
+    padding: 3rem 2rem;
+  }
+
+  .success-icon {
+    font-size: 5rem;
+    display: block;
+    margin-bottom: 1.5rem;
+    animation: pop 0.5s cubic-bezier(0.175,0.885,0.32,1.275) both;
+  }
+
+  @keyframes pop {
+    from { transform: scale(0); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  .result-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .result-sub {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+  }
+
+  .file-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.25rem;
+    background: #ecfdf5;
+    border: 1px solid #10b981;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--success);
+    margin-bottom: 2rem;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: center;
+    gap: 2.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .stat-item {
+    text-align: center;
+  }
+
+  .stat-number {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--accent-light);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-download {
+    font-size: 1rem;
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    width: 100%;
+    justify-content: center;
+    box-shadow: 0 8px 30px rgba(16,185,129,0.3);
+    transition: all 0.25s;
+    margin-bottom: 1rem;
+  }
+
+  .btn-download:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px rgba(16,185,129,0.45);
+  }
+
+  .restart-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: color 0.2s;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .restart-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-card-hover);
+  }
+
+  .confetti-bar {
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--success), var(--warning), var(--accent-light));
+    border-radius: 999px;
+    margin-bottom: 2.5rem;
+    animation: shimmer 2s linear infinite;
+    background-size: 200% 100%;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Your PDF is Ready!</h1>
+  <p>All {{ file_count }} file{{ file_count|pluralize }} merged successfully</p>
+</div>
+
+<div class="card result-card">
+  <div class="confetti-bar"></div>
+
+  <span class="success-icon">🎉</span>
+  <div class="result-title">Merge Complete!</div>
+  <p class="result-sub">Your PDFs have been combined into one document.</p>
+
+  <div class="file-pill">
+    📄 {{ compiled_name }}
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-item">
+      <div class="stat-number">{{ file_count }}</div>
+      <div class="stat-label">Files Merged</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">1</div>
+      <div class="stat-label">Output PDF</div>
+    </div>
+  </div>
+
+  <a href="?dl=1" class="btn btn-success btn-download">
+    ⬇ Download {{ compiled_name }}
+  </a>
+
+  <div style="margin-top: 0.5rem;">
+    <form method="post" action="{% url 'compiler_app:clear_session' %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="restart-link">
+        🔄 Start Over — Compile New PDFs
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
