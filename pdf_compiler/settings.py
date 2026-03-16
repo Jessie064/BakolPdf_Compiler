@@ -25,11 +25,7 @@ SECRET_KEY = 'django-insecure-tx7%l9b^0nm474_9&uhw%&os$^*wzdkduj3p%c2v@lnyul66m=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
-
-# Ensure HTTPS proxy headers are respected on Render
-if os.environ.get('RENDER'):
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+ALLOWED_HOSTS = ['*'] # In production, set to ['yourusername.pythonanywhere.com']
 
 
 # Application definition
@@ -92,12 +88,11 @@ if os.environ.get('DB_NAME'):
         }
     }
 else:
-    # Fallback to sqlite3 for local development if Postgres env vars aren't set
-    # On Render, use the persistent /data directory for the SQLite database
+    # Fallback to sqlite3 for local development and PythonAnywhere
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': '/data/db.sqlite3' if os.environ.get('RENDER') else BASE_DIR / 'db.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 
@@ -141,7 +136,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media files (user uploads)
 MEDIA_URL = '/media/'
-MEDIA_ROOT = '/data/media' if os.environ.get('RENDER') else BASE_DIR / 'media'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # File upload limits - 20 MB per file
 DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB

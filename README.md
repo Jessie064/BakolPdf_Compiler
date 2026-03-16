@@ -44,16 +44,32 @@ To run this application on your local machine:
 6. **Access the App**:
    Open a web browser and navigate to `http://127.0.0.1:8000/`.
 
-## Deployment (Render.com)
+## Deployment (PythonAnywhere)
 
-This application is fully configured to be deployed on **Render.com** using a **Blueprint**. Render provides a Persistent Disk natively, meaning the SQLite database and PDF files survive application restarts natively without requiring AWS S3.
+This application is ready to be deployed on **PythonAnywhere** for 100% free hosting with persistent file storage. This ensures your SQLite database and uploaded PDFs are safely stored!
 
-**To deploy to Render:**
+**To deploy to PythonAnywhere:**
 1. Push this repository to GitHub.
-2. Log into the Render Dashboard and click **New > Blueprint**.
-3. Connect your GitHub repository.
-4. Render will automatically read the `render.yaml` file to provision the necessary web service (using `gunicorn`), serve static files via WhiteNoise, and attach a 1GB persistent disk located at `/data` automatically.
-5. Your Django app will run safely, keeping user PDFs and data intact.
+2. Create a free account at [PythonAnywhere](https://www.pythonanywhere.com/).
+3. Open a **Bash Console** in PythonAnywhere and clone your repository:
+   ```bash
+   git clone https://github.com/Jessie064/BakolPdf_Compiler.git
+   ```
+4. Navigate to the folder and create a virtual environment:
+   ```bash
+   cd BakolPdf_Compiler
+   python3.10 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   python manage.py migrate
+   python manage.py collectstatic --noinput
+   ```
+5. Go to the **Web** tab in PythonAnywhere and click **Add a new web app**.
+6. Select **Manual configuration** and choose **Python 3.10**.
+7. In the **Virtualenv** section, set the path to: `/home/yourusername/BakolPdf_Compiler/venv`
+8. In the **Code** section, set the Source Code path to: `/home/yourusername/BakolPdf_Compiler`
+9. Edit the **WSGI configuration file** to point to your Django project. Replace the file's contents with the Django template provided by PythonAnywhere and update the path string to point to `BakolPdf_Compiler`.
+10. Click the big green **Reload** button! Your app is now live for free.
 
 ## Limits & Considerations
 
